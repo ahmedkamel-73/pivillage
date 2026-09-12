@@ -4,7 +4,7 @@ export async function onRequestGet({request, env}) {
   const session=await auth(request, env);
   if(!session) return Response.json({error:'Auth required'}, {status:401});
   const url=new URL(request.url);
-  const type=url.searchParams.get('type')||'buyer'; // buyer or seller
+  const type=url.searchParams.get('type')||'buyer';
   if(type==='seller'){
     const {results}=await env.DB.prepare("SELECT orders.*, shops.name as shop_name FROM orders JOIN shops ON orders.shop_id=shops.id WHERE shops.owner_id=? ORDER BY orders.created_at DESC LIMIT 100").bind(session.user_id).all();
     return Response.json({orders:results});
@@ -16,15 +16,15 @@ export async function onRequestGet({request, env}) {
 export async function onRequestPost({request, env}) {
   const session=await auth(request, env);
   if(!session) return Response.json({error:'Auth required'}, {status:401});
-  const {shop_id, items} = await request.json(); // items: [{product_id, quantity}]
+  const {shop_id, items} = await request.json();
   if(!shop_id || !items || !Array.isArray(items) || items.length===0) return Response.json({error:'shop_id and items required'}, {status:400});
-  const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? AND is_active=TRUE").bind(shop_id).first();
+  const shop=await env.DB.prepare("SELECT * FROM shops WHERE id=? AND is_active=1").bind(shop_id).first();
   if(!shop) return Response.json({error:'Shop not found'}, {status:404});
   if(shop.owner_id===session.user_id) return Response.json({error:'Cannot buy from own shop'}, {status:400});
   let total=0;
   for(const it of items){
     if(!it.product_id || !it.quantity || it.quantity<=0) return Response.json({error:'Invalid item'}, {status:400});
-    const prod=await env.DB.prepare("SELECT * FROM products WHERE id=? AND shop_id=? AND is_active=TRUE").bind(it.product_id, shop_id).first();
+    const prod=await env.DB.prepare("SELECT * FROM products WHERE id=? AND shop_id=? AND is_active=1").bind(it.product_id, shop_id).first();
     if(!prod) return Response.json({error:`Product ${it.product_id} not found`}, {status:404});
     if(prod.stock < it.quantity) return Response.json({error:`Insufficient stock for ${prod.name}`}, {status:400});
     total+=prod.price_pi * it.quantity;
@@ -35,7 +35,6 @@ export async function onRequestPost({request, env}) {
     env.DB.prepare("INSERT INTO orders (id, buyer_id, shop_id, total_pi, status) VALUES (?,?,?,?, 'pending')").bind(orderId, session.user_id, shop_id, total),
     ...items.map(it=> env.DB.prepare("INSERT INTO order_items (id, order_id, product_id, quantity, price_pi) VALUES (?,?,?,?, (SELECT price_pi FROM products WHERE id=?))").bind(crypto.randomUUID(), orderId, it.product_id, it.quantity, it.product_id)),
   ]);
-  // Decrease stock
   for(const it of items){
     await env.DB.prepare("UPDATE products SET stock=stock-? WHERE id=?").bind(it.quantity, it.product_id).run();
   }
