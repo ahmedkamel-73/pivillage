@@ -1,4 +1,3 @@
-// Pi Village v2.6 Production - Secure Escrow - Fixes 12,13,22,23,24,25,30
 async function hashToken(t){const enc=new TextEncoder().encode(t);const h=await crypto.subtle.digest('SHA-256',enc);return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');}
 async function auth(request, env){
   const h=request.headers.get('Authorization');
@@ -27,10 +26,9 @@ export async function onRequestPost({request, env}) {
   const isAdmin=session.role==='admin';
   let isMod=isAdmin;
   if(session.role==='moderator'){
-    const mod=await env.DB.prepare("SELECT * FROM moderators WHERE user_id=? AND (section_id=? OR can_resolve_all=TRUE)").bind(session.user_id, order.section_id).first();
+    const mod=await env.DB.prepare("SELECT * FROM moderators WHERE user_id=? AND (section_id=? OR can_resolve_all=1)").bind(session.user_id, order.section_id).first();
     isMod=!!mod;
   }
-  // FIX 13: Moderator section check enforced
   if(['cancelled','refunded','auto_released'].includes(order.status)) return Response.json({error:`Order ${order.status}`}, {status:400});
   if(escrow.status!=='held' && action!=='admin_resolve') return Response.json({error:`Escrow ${escrow.status}`}, {status:400});
 
@@ -38,11 +36,10 @@ export async function onRequestPost({request, env}) {
     if(!isBuyer) return Response.json({error:'Only buyer'}, {status:403});
     if(!order.seller_delivered) return Response.json({error:'Not delivered yet'}, {status:400});
     if(order.buyer_confirmed) return Response.json({error:'Already confirmed'}, {status:400});
-    // FIX 30: Check auto_released
     if(order.status==='auto_released') return Response.json({error:'Already auto-released after 72h'}, {status:400});
     await env.DB.batch([
-      env.DB.prepare("UPDATE orders SET buyer_confirmed=TRUE WHERE id=?").bind(order_id),
-      env.DB.prepare("UPDATE escrow_transactions SET buyer_approved=TRUE, last_action_by=? WHERE order_id=?").bind(session.user_id, order_id)
+      env.DB.prepare("UPDATE orders SET buyer_confirmed=1 WHERE id=?").bind(order_id),
+      env.DB.prepare("UPDATE escrow_transactions SET buyer_approved=1, last_action_by=? WHERE order_id=?").bind(session.user_id, order_id)
     ]);
     const upd=await env.DB.prepare("SELECT * FROM escrow_transactions WHERE order_id=?").bind(order_id).first();
     if(upd.buyer_approved && upd.seller_approved){
@@ -60,12 +57,11 @@ export async function onRequestPost({request, env}) {
   if(action==='seller_delivered'){
     if(!isSeller) return Response.json({error:'Only seller'}, {status:403});
     if(order.seller_delivered) return Response.json({error:'Already delivered'}, {status:400});
-    // FIX 22: Require proof
     if(!tracking_number && !delivery_proof) return Response.json({error:'tracking_number or delivery_proof required'}, {status:400});
     const releaseAt=new Date(Date.now()+72*60*60*1000).toISOString();
     await env.DB.batch([
-      env.DB.prepare("UPDATE escrow_transactions SET seller_approved=TRUE, auto_release_after=?, last_action_by=? WHERE order_id=?").bind(releaseAt, session.user_id, order_id),
-      env.DB.prepare("UPDATE orders SET seller_delivered=TRUE, delivered_at=CURRENT_TIMESTAMP, auto_release_at=?, tracking_number=?, delivery_proof=?, status='delivered' WHERE id=?").bind(releaseAt, tracking_number||null, delivery_proof||null, order_id)
+      env.DB.prepare("UPDATE escrow_transactions SET seller_approved=1, auto_release_after=?, last_action_by=? WHERE order_id=?").bind(releaseAt, session.user_id, order_id),
+      env.DB.prepare("UPDATE orders SET seller_delivered=1, delivered_at=CURRENT_TIMESTAMP, auto_release_at=?, tracking_number=?, delivery_proof=?, status='delivered' WHERE id=?").bind(releaseAt, tracking_number||null, delivery_proof||null, order_id)
     ]);
     await audit(env, session.user_id, 'seller_delivered', 'order', order_id, order, {tracking_number, delivery_proof, auto_release_at:releaseAt}, null, ip);
     return Response.json({delivered:true, auto_release_at:releaseAt});
@@ -77,10 +73,9 @@ export async function onRequestPost({request, env}) {
     if(order.disputed) return Response.json({error:'Already disputed'}, {status:400});
     if(!order.seller_delivered) return Response.json({error:'Cannot dispute before delivery'}, {status:400});
     const disputeId=crypto.randomUUID();
-    // FIX 24: Stop auto_release
     await env.DB.batch([
       env.DB.prepare("INSERT INTO disputes (id, order_id, raised_by, reason, evidence, status) VALUES (?,?,?,?,?,'open')").bind(disputeId, order_id, session.user_id, reason, evidence?JSON.stringify(evidence):null),
-      env.DB.prepare("UPDATE orders SET disputed=TRUE, dispute_id=?, status='disputed', auto_release_at=NULL WHERE id=?").bind(disputeId, order_id),
+      env.DB.prepare("UPDATE orders SET disputed=1, dispute_id=?, status='disputed', auto_release_at=NULL WHERE id=?").bind(disputeId, order_id),
       env.DB.prepare("UPDATE escrow_transactions SET status='disputed', auto_release_after=NULL WHERE order_id=?").bind(order_id)
     ]);
     await audit(env, session.user_id, 'dispute_opened', 'order', order_id, order, {dispute_id:disputeId}, reason, ip);
@@ -92,7 +87,6 @@ export async function onRequestPost({request, env}) {
     if(!['buyer','seller','split'].includes(resolution)) return Response.json({error:'Invalid resolution'}, {status:400});
     if(!reason || reason.trim().length<10) return Response.json({error:'Reason required'}, {status:400});
     if(!order.disputed) return Response.json({error:'Not disputed'}, {status:400});
-    // FIX 12: Split actually splits
     if(resolution==='buyer'){
       await env.DB.batch([
         env.DB.prepare("UPDATE escrow_transactions SET status='refunded', buyer_amount=?, seller_amount=0, last_action_by=? WHERE order_id=?").bind(escrow.amount_pi, session.user_id, order_id),
@@ -107,7 +101,6 @@ export async function onRequestPost({request, env}) {
       ]);
     } else {
       const half=escrow.amount_pi/2;
-      // FIX 12 & 25: Split with percentages and audit
       await env.DB.batch([
         env.DB.prepare("UPDATE escrow_transactions SET status='split', buyer_amount=?, seller_amount=?, released_at=CURRENT_TIMESTAMP, last_action_by=? WHERE order_id=?").bind(half, half, session.user_id, order_id),
         env.DB.prepare("UPDATE orders SET status='completed' WHERE id=?").bind(order_id),
@@ -135,11 +128,10 @@ export async function onRequestGet({request, env}) {
   if(!order) return Response.json({error:'Not found'}, {status:404});
   let isMod=session.role==='admin';
   if(session.role==='moderator'){
-    const mod=await env.DB.prepare("SELECT * FROM moderators WHERE user_id=? AND (section_id=? OR can_resolve_all=TRUE)").bind(session.user_id, order.section_id).first();
+    const mod=await env.DB.prepare("SELECT * FROM moderators WHERE user_id=? AND (section_id=? OR can_resolve_all=1)").bind(session.user_id, order.section_id).first();
     isMod=!!mod;
   }
   if(order.buyer_id!==session.user_id && order.seller_id!==session.user_id && !isMod) return Response.json({error:'Forbidden'}, {status:403});
-  // FIX 23: Sanitize sensitive data
   const escrow=await env.DB.prepare("SELECT id, order_id, amount_pi, status, buyer_approved, seller_approved, buyer_amount, seller_amount, released_at, auto_release_after FROM escrow_transactions WHERE order_id=?").bind(orderId).first();
   const dispute=order.dispute_id ? await env.DB.prepare("SELECT id, reason, evidence, status, resolution, resolution_reason, split_seller_percent FROM disputes WHERE id=?").bind(order.dispute_id).first() : null;
   const safeOrder={id:order.id, status:order.status, total_pi:order.total_pi, buyer_confirmed:order.buyer_confirmed, seller_delivered:order.seller_delivered, disputed:order.disputed, tracking_number:order.tracking_number, delivered_at:order.delivered_at, auto_release_at:order.auto_release_at};
