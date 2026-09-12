@@ -20,8 +20,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
 
   <!-- ✅ React + ReactDOM من CDN -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
   <!-- ✅ Pi SDK -->
   <script src="https://sdk.minepi.com/pi-sdk.js"></script>
@@ -325,7 +325,7 @@ img,video{max-width:100%;height:auto}
 <body>
   <div id="root"></div>
 
-  <script type="module">
+  <script>
 const { createElement: h, useState, useEffect, useRef } = React;
 
 const API = {
@@ -342,6 +342,25 @@ const API = {
   get: (p) => API.request(p, { method: 'GET' }),
   post: (p, b) => API.request(p, { method: 'POST', body: JSON.stringify(b || {}) }),
 };
+
+// ✅ مكوّن منفصل للمكعب - يحل مشكلة الأقواس نهائياً
+function Cube({ color, top, left }) {
+  return h('div', {
+    className: 'absolute',
+    style: { top, left }
+  },
+    h('div', {
+      className: 'relative w-[108px] h-[108px] rounded-[16px] grid place-items-center cursor-pointer transition-all duration-300 hover:scale-[1.05]',
+      style: {
+        background: color,
+        border: '2px dashed rgba(255,255,255,0.15)',
+      }
+    }, [
+      h('div', { key: 'q', className: 'text-[42px] font-black text-white/25' }, '؟'),
+      h('div', { key: 'l', className: 'text-[10px] font-bold text-white/30 mt-1' }, 'بانتظار'),
+    ])
+  );
+}
 
 function PiVillage() {
   const [showHero, setShowHero] = useState(true);
@@ -457,7 +476,6 @@ function PiVillage() {
         pi_access_token: auth.accessToken,
       });
 
-      // ✅ FIX: خزّن res.user.id (UUID) وليس Pi UID
       localStorage.setItem('pi_token',    res.session_token || auth.accessToken);
       localStorage.setItem('pi_username', auth.user.username);
       localStorage.setItem('user_id',     res.user.id);
@@ -703,32 +721,16 @@ function PiVillage() {
             style: { animation: 'floatPi 4s ease-in-out infinite' }
           }, 'π')),
 
-          // 4 EMPTY CUBES — no labels, no preset sections
+          // 4 مكعبات - بقت مكوّن منفصل
           h('div', {
             key: 'cubes',
             className: 'relative w-[360px] h-[360px] mt-16'
           }, [
-            { color: 'rgba(249,168,38,0.15)' },
-            { color: 'rgba(108,92,231,0.15)' },
-            { color: 'rgba(236,72,153,0.15)' },
-            { color: 'rgba(16,185,129,0.15)' },
-          ].map((s, i) => h('div', {
-            key: i,
-            className: 'absolute',
-            style: {
-              top: ['6%', '6%', '58%', '58%'][i],
-              left: ['6%', '58%', '6%', '58%'][i],
-            }
-          }, h('div', {
-            className: 'relative w-[108px] h-[108px] rounded-[16px] grid place-items-center cursor-pointer transition-all duration-300 hover:scale-[1.05]',
-            style: {
-              background: s.color,
-              border: '2px dashed rgba(255,255,255,0.15)',
-            }
-          }, [
-            h('div', { key: 'q', className: 'text-[42px] font-black text-white/25' }, '؟'),
-            h('div', { key: 'l', className: 'text-[10px] font-bold text-white/30 mt-1' }, 'بانتظار'),
-          ]))),
+            { key: 'c1', color: 'rgba(249,168,38,0.15)',  top: '6%',  left: '6%'  },
+            { key: 'c2', color: 'rgba(108,92,231,0.15)',  top: '6%',  left: '58%' },
+            { key: 'c3', color: 'rgba(236,72,153,0.15)',  top: '58%', left: '6%'  },
+            { key: 'c4', color: 'rgba(16,185,129,0.15)',  top: '58%', left: '58%' },
+          ].map(c => h(Cube, { key: c.key, color: c.color, top: c.top, left: c.left }))),
         ]),
       ]),
       h('button', {
