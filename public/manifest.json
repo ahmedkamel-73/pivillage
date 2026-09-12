@@ -1,0 +1,16 @@
+{
+  "name": "قرية Pi - سوق Pi Network",
+  "short_name": "قرية Pi",
+  "description": "قرية رقمية يبنيها المجتمع - دفع بـ Pi - تبدأ فارغة وينمو مع التجار",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#f9a826",
+  "orientation": "portrait-primary",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
