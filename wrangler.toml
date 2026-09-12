@@ -7,3 +7,8 @@ VERSION = "2.6-production"
 COMMISSION = "0%"
 BILLBOARD_PRICE = "0.1 Pi/day"
 ESCROW_HOURS = "72"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pi-village-db-v26"
+database_id = "aa0eca7c-7471-4d44-95bb-62499b87acef"
