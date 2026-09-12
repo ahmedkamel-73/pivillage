@@ -5,7 +5,7 @@ export async function onRequestGet({request, env}) {
   const section=url.searchParams.get('section');
   const owner=url.searchParams.get('owner');
   const q=url.searchParams.get('q');
-  let sql="SELECT shops.*, sections.name as section_name FROM shops LEFT JOIN sections ON shops.section_id=sections.id WHERE shops.is_active=TRUE";
+  let sql="SELECT shops.*, sections.name as section_name FROM shops LEFT JOIN sections ON shops.section_id=sections.id WHERE shops.is_active=1";
   let params=[];
   if(section){sql+=" AND shops.section_id=?";params.push(section);}
   if(owner){sql+=" AND shops.owner_id=?";params.push(owner);}
