@@ -1,0 +1,21 @@
+{
+  "name": "pi-village",
+  "version": "2.6.1",
+  "description": "Pi Village - First 0% commission marketplace built by Pi community",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public --d1=DB --compatibility-date=2024-06-01 --local",
+    "deploy": "wrangler pages deploy public",
+    "db:create": "wrangler d1 create pi-village-db-v26",
+    "db:init": "wrangler d1 execute pi-village-db-v26 --file=database/schema-v2.6-production.sql",
+    "deploy:prod": "wrangler pages deploy public --project-name=pivillage"
+  },
+  "devDependencies": {
+    "wrangler": "^3.70.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "keywords": ["pi-network", "marketplace", "p2p", "escrow"]
+}
