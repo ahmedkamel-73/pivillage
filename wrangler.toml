@@ -7,6 +7,7 @@ VERSION = "2.6-production"
 COMMISSION = "0%"
 BILLBOARD_PRICE = "0.1 Pi/day"
 ESCROW_HOURS = "72"
+NODE_ENV = "production"
 
 [[d1_databases]]
 binding = "DB"
