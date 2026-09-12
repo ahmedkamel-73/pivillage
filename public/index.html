@@ -343,7 +343,7 @@ const API = {
   post: (p, b) => API.request(p, { method: 'POST', body: JSON.stringify(b || {}) }),
 };
 
-// ✅ مكوّن منفصل للمكعب - يحل مشكلة الأقواس نهائياً
+// ✅ مكوّن منفصل للمكعب
 function Cube({ color, top, left }) {
   return h('div', {
     className: 'absolute',
@@ -360,6 +360,15 @@ function Cube({ color, top, left }) {
       h('div', { key: 'l', className: 'text-[10px] font-bold text-white/30 mt-1' }, 'بانتظار'),
     ])
   );
+}
+
+// ✅ دالة كشف بيئة Pi Browser بدقة
+function detectPiEnvironment() {
+  const ua = navigator.userAgent || '';
+  const inPiBrowser = /PiBrowser|Pi Browser/i.test(ua);
+  const hasPiSDK = typeof window.Pi !== 'undefined';
+  const hasAuth = typeof window.Pi?.authenticate === 'function';
+  return { inPiBrowser, hasPiSDK, hasAuth, ua };
 }
 
 function PiVillage() {
@@ -396,6 +405,10 @@ function PiVillage() {
   };
 
   useEffect(() => {
+    // كشف البيئة في الكونسول عشان تسهّل التشخيص
+    const env = detectPiEnvironment();
+    console.log('🔍 Pi Environment:', env);
+
     try {
       if (window.Pi) {
         window.Pi.init({ version: '2.0', sandbox: false });
@@ -446,15 +459,34 @@ function PiVillage() {
     } catch (e) { console.error('loadSections', e); }
   }
 
+  // ✅ نسخة محسّنة من loginPi
   async function loginPi() {
-    if (!window.Pi) {
-      showToast('افتح التطبيق من Pi Browser');
+    console.log('🔵 loginPi triggered');
+
+    const env = detectPiEnvironment();
+    console.log('   Environment:', env);
+
+    // 1. تحقق إن إحنا جوه Pi Browser
+    if (!env.inPiBrowser) {
+      console.warn('❌ Not in Pi Browser. UA:', env.ua);
+      showToast('⚠️ افتح التطبيق من متصفح Pi الرسمي', 5000);
       return;
     }
+
+    // 2. تحقق إن SDK محمّل
+    if (!env.hasPiSDK || !env.hasAuth) {
+      console.error('❌ Pi SDK not loaded:', env);
+      showToast('❌ Pi SDK مش محمّل صح، حاول تحدّث الصفحة', 5000);
+      return;
+    }
+
+    // 3. جرب الدخول
     try {
+      console.log('🟡 Calling Pi.authenticate...');
       const auth = await window.Pi.authenticate(
         ['username', 'payments', 'wallet_address'],
         (payment) => {
+          console.log('⚠️ Incomplete payment found:', payment);
           fetch('/pi/complete', {
             method: 'POST',
             headers: {
@@ -470,11 +502,15 @@ function PiVillage() {
         }
       );
 
+      console.log('🟢 Auth success:', auth);
+
       const res = await API.post('/api/auth', {
         pi_uid: auth.user.uid,
         pi_username: auth.user.username,
         pi_access_token: auth.accessToken,
       });
+
+      console.log('🟢 Server response:', res);
 
       localStorage.setItem('pi_token',    res.session_token || auth.accessToken);
       localStorage.setItem('pi_username', auth.user.username);
@@ -483,11 +519,12 @@ function PiVillage() {
       setAuthed(true);
       setUsername(auth.user.username);
       setUserId(res.user.id);
-      showToast(`أهلاً ${auth.user.username} في قرية Pi!`);
+      showToast(`🎉 أهلاً ${auth.user.username} في قرية Pi!`);
       loadShops();
     } catch (e) {
-      console.error(e);
-      showToast('فشل تسجيل الدخول: ' + (e?.message || ''));
+      console.error('❌ Login error:', e);
+      const msg = e?.message || e?.error || JSON.stringify(e);
+      showToast('فشل تسجيل الدخول: ' + msg, 5000);
     }
   }
 
@@ -642,10 +679,10 @@ function PiVillage() {
     // ===== TOAST =====
     toast && h('div', {
       key: 'toast',
-      className: 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-[#1a1a2e] border border-[#f9a826]/30 text-white px-5 py-3 rounded-full text-[13px] font-bold shadow-2xl flex items-center gap-2'
+      className: 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-[#1a1a2e] border border-[#f9a826]/30 text-white px-5 py-3 rounded-full text-[13px] font-bold shadow-2xl flex items-center gap-2 max-w-[90vw] text-center'
     }, [
-      h('span', { key: 'c', className: 'w-6 h-6 rounded-full bg-[#f9a826] text-[#1a1a2e] grid place-items-center text-[12px]' }, 'π'),
-      toast,
+      h('span', { key: 'c', className: 'w-6 h-6 shrink-0 rounded-full bg-[#f9a826] text-[#1a1a2e] grid place-items-center text-[12px]' }, 'π'),
+      h('span', { key: 'm', className: 'leading-snug' }, toast),
     ]),
 
     // ===== HERO =====
@@ -712,7 +749,6 @@ function PiVillage() {
           key: 'v',
           className: 'order-1 md:order-2 relative h-[420px] md:h-[520px] flex items-center justify-center'
         }, [
-          // π badge
           h('div', {
             key: 'pi',
             className: 'absolute top-[14%] left-1/2 -translate-x-1/2 z-20'
@@ -721,7 +757,6 @@ function PiVillage() {
             style: { animation: 'floatPi 4s ease-in-out infinite' }
           }, 'π')),
 
-          // 4 مكعبات - بقت مكوّن منفصل
           h('div', {
             key: 'cubes',
             className: 'relative w-[360px] h-[360px] mt-16'
